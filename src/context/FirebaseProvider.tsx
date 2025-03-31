@@ -1,12 +1,15 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   onAuthStateChanged,
+  User,
 } from "firebase/auth";
 import { getDatabase, ref, set, child, get } from "firebase/database";
+
+import { signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 
 interface FireBaseContextProviderType {
   signUpWithFireBase: ({
@@ -25,6 +28,9 @@ interface FireBaseContextProviderType {
     email: string;
     password: string;
   }) => void;
+  signUpWithGoogle: () => void;
+  signOutHandle: () => void;
+  userDetails: User | null;
 }
 
 interface FireBaseProviderProps {
@@ -40,6 +46,7 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
 };
 
@@ -51,6 +58,8 @@ const auth = getAuth(app);
 const dataBase = getDatabase(app);
 const dataBaseRef = ref(getDatabase());
 
+const provider = new GoogleAuthProvider();
+
 const useFireBaseContext = () => {
   const context = useContext(FireBaseContext);
   if (!context) {
@@ -60,6 +69,8 @@ const useFireBaseContext = () => {
 };
 
 const FireBaseProvider = (props: FireBaseProviderProps) => {
+  const [userDetails, setUserDetails] = useState<User | null>(null);
+
   const writeFunction = () => {
     set(ref(dataBase, "users/arnab"), {
       username: "Arnab Paul",
@@ -120,14 +131,48 @@ const FireBaseProvider = (props: FireBaseProviderProps) => {
       });
   };
 
+  const signUpWithGoogle = () => {
+    signInWithPopup(auth, provider)
+      .then((result) => {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const user = result.user;
+
+        alert(`Successfully signed up with email: ${user.email}`);
+        console.log("Token and User--->", credential?.accessToken, user);
+      })
+      .catch((error) => {
+        alert("Google Signup Failed");
+        console.log(error);
+
+        const email = error.customData.email;
+        const credential = GoogleAuthProvider.credentialFromError(error);
+
+        console.log("Email and Credential--->", email, credential);
+      });
+  };
+
+  const signOutHandle = () => {
+    signOut(auth)
+      .then(() => {
+        alert("Sign Out Succesfull");
+      })
+      .catch((error) => {
+        alert("Sign Out UnSuccesfull");
+        console.log("Sign Out UnSuccesfull error", error);
+      });
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         const uid = user.uid;
-        alert("The onAuthStateChanged is triggered ");
+        setUserDetails(user);
+        console.log("user frpo mthe onAuthStateChanged", user);
+        alert("The User is Authenticated and onAuthStateChanged triggered");
         console.log("The Login triggered with the uuid ---> ", uid);
       } else {
-        alert("The user is not found");
+        setUserDetails(null);
+        alert("The User is not Authenticated");
       }
     });
 
@@ -143,6 +188,9 @@ const FireBaseProvider = (props: FireBaseProviderProps) => {
         writeFunction,
         readFunction,
         loginWithFireBase,
+        signUpWithGoogle,
+        signOutHandle,
+        userDetails,
       }}
     >
       {props.children}
